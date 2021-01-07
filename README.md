@@ -5,11 +5,13 @@ This is my implementation for the [codingame Game Of Drones](https://www.codinga
 ## How my code works
 
 (dutch)
-7 januari 2021:
+7 januari 2021: (Bronze t/m 300)
 
 Momenteel een greedy oplossing:
 Ga naar de eerste zone die niet door andere drones getarget wordt.
 De drones die overblijven doen op het moment niks
+
+Nu worden alle drones ook opgeslagen, inclusief in de zones.
 
 ## License
 
