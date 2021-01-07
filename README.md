@@ -11,7 +11,8 @@ Momenteel een greedy oplossing:
 Ga naar de eerste zone die niet door andere drones getarget wordt.
 De drones die overblijven doen op het moment niks
 
-Nu worden alle drones ook opgeslagen, inclusief in de zones.
+2e commit (3 place in silver rank)
+Nu worden alle drones ook opgeslagen, inclusief in de zones. Bot kijkt nu of het nodig is om naar een zone te gaan.
 
 ## License
 
