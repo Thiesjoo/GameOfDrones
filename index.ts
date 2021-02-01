@@ -87,37 +87,82 @@ while (true) {
 		let dronesOnZone: Drone[] = currentZone.drones.filter(
 			(x) => x.team === myTEAM
 		);
+
+		let testin: { [id: string]: number } = currentZone.drones.reduce(
+			(acc, val: Drone) => {
+				if (val.team === myTEAM) return acc;
+				if (!acc[val.team]) acc[val.team] = 0;
+				acc[val.team] += 1;
+				return acc;
+			},
+			{}
+		);
+
+		let enemiesDrones = Math.max(...Object.values(testin), 0);
+
+		let delta = dronesOnZone.length - enemiesDrones;
+		console.error(
+			`ZOne: ${zoneIndex}, enemies: ${enemiesDrones}, delta: ${delta}`,
+			testin
+		);
 		if (dronesOnZone.length > 0) {
 			//TODO: Only works with 2 players
-			let delta =
-				dronesOnZone.length -
-				currentZone.drones.filter((x) => x.team !== myTEAM).length;
-			if (delta === 0 && currentZone.owner === -1) {
-				//Defending and need another drone
-				zoneMap[zoneIndex] = { state: ZoneStates.NeedHelp, num: 1 };
-				dronesOnZone.forEach((x) => {
-					droneMap[x.id] = DroneStates.Defending;
-				});
-			} else if (delta > 0 && currentZone.owner === myTEAM) {
-				//We won, and delta drones are idle
-				// droneMap[dronesOnZone[0].id] = DroneStates.Idle
-				dronesOnZone.forEach((x, i) => {
-					droneMap[x.id] = i < delta ? DroneStates.Idle : DroneStates.Defending;
-				});
-			} else if (delta < 0 && currentZone.owner !== -1) {
-				zoneMap[zoneIndex] = { state: ZoneStates.NeedHelp, num: 1 };
-				dronesOnZone.forEach((x) => {
-					droneMap[x.id] = DroneStates.Defending;
-				});
+			if (delta === 0) {
+				switch (currentZone.owner) {
+					case myTEAM:
+						//We got em
+						zoneMap[zoneIndex] = { state: ZoneStates.Mine, num: null };
+						dronesOnZone.forEach((x) => {
+							droneMap[x.id] = DroneStates.Defending;
+						});
+						break;
+					default:
+						//Defending and need another drone
+						zoneMap[zoneIndex] = { state: ZoneStates.NeedHelp, num: 1 };
+						dronesOnZone.forEach((x) => {
+							droneMap[x.id] = DroneStates.Defending;
+						});
+						break;
+				}
+			} else if (delta > 0) {
+				switch (currentZone.owner) {
+					case myTEAM:
+						//We won, and delta drones are idle
+						// droneMap[dronesOnZone[0].id] = DroneStates.Idle
+						dronesOnZone.forEach((x, i) => {
+							droneMap[x.id] =
+								i < delta ? DroneStates.Idle : DroneStates.Defending;
+						});
+						break;
+					default:
+						console.error("Zone is not mine, but delta says so?");
+						break;
+				}
+			} else if (delta < 0) {
+				switch (currentZone.owner) {
+					case myTEAM:
+						console.error("Zone is mine, but delta says otherwise?");
+						break;
+					default:
+						zoneMap[zoneIndex] = {
+							state: ZoneStates.NeedHelp,
+							num: -delta + 1,
+						};
+						dronesOnZone.forEach((x) => {
+							droneMap[x.id] = DroneStates.Defending;
+						});
+						break;
+				}
 			}
 		} else {
-			if (currentZone.owner === myTEAM) {
-				zoneMap[zoneIndex] = { state: ZoneStates.Mine, num: null };
-			} else {
-				zoneMap[zoneIndex] = {
-					state: ZoneStates.NeedHelp,
-					num: currentZone.drones.filter((x) => x.team !== myTEAM).length + 1,
-				};
+			switch (currentZone.owner) {
+				case myTEAM:
+					zoneMap[zoneIndex] = { state: ZoneStates.Mine, num: null };
+					break;
+				default:
+					zoneMap[zoneIndex] = { state: ZoneStates.NeedHelp, num: -delta + 1 };
+
+					break;
 			}
 		}
 	});
