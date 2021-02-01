@@ -7,11 +7,7 @@ class Vector2 {
 }
 
 class Drone {
-	constructor(
-		public pos: Vector2,
-		public id: number, //The local id
-		public team: number //Which team the drone belongs to
-	) {}
+	constructor(public pos: Vector2, public id: number, public team: number) {}
 }
 
 class Zone {
@@ -23,12 +19,21 @@ class Zone {
 	) {}
 }
 
+enum DroneStates {
+	Defending = "defending",
+	Idle = "idle",
+}
+enum ZoneStates {
+	NeedHelp = "needhelp",
+	Mine = "MINE",
+}
+
 const sqDist = (a: Vector2, b: Vector2) =>
 	Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
 
 var inputs: string[] = readline().split(" ");
 const amountOfPlayers: number = parseInt(inputs[0]); // number of players in the game (2 to 4 players)
-const myTeam: number = parseInt(inputs[1]); // ID of your player (0, 1, 2, or 3)
+const myTEAM: number = parseInt(inputs[1]); // ID of your player (0, 1, 2, or 3)
 const dronesPerTeam: number = parseInt(inputs[2]); // number of drones in each team (3 to 11)
 const amountOfZones: number = parseInt(inputs[3]); // number of zones on the map (4 to 8)
 
@@ -73,60 +78,120 @@ while (true) {
 		}
 	}
 
+	const droneMap: { [id: number]: DroneStates } = {};
+	const zoneMap: { [id: number]: { state: ZoneStates; num: number } } = {};
+	drones[myTEAM].forEach((x) => {
+		droneMap[x.id] = DroneStates.Idle;
+	});
+	zones.forEach((currentZone, zoneIndex) => {
+		let dronesOnZone: Drone[] = currentZone.drones.filter(
+			(x) => x.team === myTEAM
+		);
+		if (dronesOnZone.length > 0) {
+			//TODO: Only works with 2 players
+			let delta =
+				dronesOnZone.length -
+				currentZone.drones.filter((x) => x.team !== myTEAM).length;
+			if (delta === 0 && currentZone.owner === -1) {
+				//Defending and need another drone
+				zoneMap[zoneIndex] = { state: ZoneStates.NeedHelp, num: 1 };
+				dronesOnZone.forEach((x) => {
+					droneMap[x.id] = DroneStates.Defending;
+				});
+			} else if (delta > 0 && currentZone.owner === myTEAM) {
+				//We won, and delta drones are idle
+				// droneMap[dronesOnZone[0].id] = DroneStates.Idle
+				dronesOnZone.forEach((x, i) => {
+					droneMap[x.id] = i < delta ? DroneStates.Idle : DroneStates.Defending;
+				});
+			} else if (delta < 0 && currentZone.owner !== -1) {
+				zoneMap[zoneIndex] = { state: ZoneStates.NeedHelp, num: 1 };
+				dronesOnZone.forEach((x) => {
+					droneMap[x.id] = DroneStates.Defending;
+				});
+			}
+		} else {
+			if (currentZone.owner === myTEAM) {
+				zoneMap[zoneIndex] = { state: ZoneStates.Mine, num: null };
+			} else {
+				zoneMap[zoneIndex] = {
+					state: ZoneStates.NeedHelp,
+					num: currentZone.drones.filter((x) => x.team !== myTEAM).length + 1,
+				};
+			}
+		}
+	});
+
+	drones[myTEAM].forEach((x) => {
+		let state = droneMap[x.id];
+		if (state === DroneStates.Idle) {
+			let targetList = Object.entries(zoneMap)
+				.map((y) => {
+					return {
+						id: y[0],
+						zone: y[1],
+						dist: sqDist(x.pos, zones[+y[0]].pos),
+					};
+				})
+				.filter((y) => {
+					return y.zone.state === ZoneStates.NeedHelp; // && y.zone.num > 0
+				});
+			targetList.sort((a, b) => a.dist - b.dist);
+			let target: { id: string } = targetList.find((y) => y.zone.num > 0);
+			if (!target) {
+				console.error("fuck");
+				target = {
+					id: "0",
+				};
+			}
+			if (zoneMap[+target.id]) zoneMap[+target.id].num -= 1;
+			let zone = zones[+target.id].pos;
+			console.log(`${zone.x} ${zone.y}`);
+		} else if (state === DroneStates.Defending) {
+			console.log(`${x.pos.x} ${x.pos.y}`);
+		} else {
+			console.log("we dun goofed");
+		}
+	});
+
+	continue;
 	for (let i = 0; i < dronesPerTeam; i++) {
-		let calc = getScore(drones[myTeam][i])[0];
-		let picked = calc.zone;
+		let distances: Array<{
+			dist: number;
+			zone: Zone;
+			minPlayers: number;
+		}> = zones.map((zone) => {
+			return {
+				dist: sqDist(zone.pos, drones[myTEAM][i].pos),
+				zone,
+				minPlayers: Math.max(
+					...zone.drones.reduce((acc, val) => {
+						if (val.id === myTEAM) return acc;
+						if (!acc[val.id]) acc[val.id] = 0;
+						acc[val.id] += 1;
+						return acc;
+					}, []),
+					0
+				),
+			};
+		});
 
-		if (!drones[myTeam][i].pos.equals(picked.pos)) picked.targeting.push(i);
-		console.log(`${picked.pos.x} ${picked.pos.y} ${calc.point}`);
+		distances.sort((a, b) => a.dist - b.dist);
+
+		let testing: Array<{ dist: number; zone: Zone }> = distances.filter(
+			(x) =>
+				x.zone.targeting.filter((y) => y !== myTEAM).length <
+					x.minPlayers + 1 && x.zone.owner !== myTEAM
+		);
+
+		let picked: Zone = null;
+
+		if (testing.length === 0) {
+			picked = distances[0].zone;
+		} else {
+			picked = testing[0].zone;
+		}
+		picked.targeting.push(i);
+		console.log(`${picked.pos.x} ${picked.pos.y}`);
 	}
-}
-
-function getScore(drone: Drone): Array<{ point: number; zone: Zone }> {
-	let info: Array<{
-		dist: number;
-		zone: Zone;
-		players: Array<number>;
-		minPlayers: number;
-	}> = zones.map((zone) => {
-		//Array with the index being the teamnumber and the value being the amount of drones of that team on the zone.
-		const players = zone.drones.reduce((acc, val) => {
-			if (val.id === drone.id) return acc;
-			if (!acc[val.team]) acc[val.team] = 0;
-			acc[val.team] += 1;
-			return acc;
-		}, []);
-
-		return {
-			zone, // Reference to the zone
-			dist: sqDist(zone.pos, drone.pos), //Distance between zone and drone
-			players, //All team on the zone
-			minPlayers: Math.max(0, ...players.filter((x, i) => i !== drone.team)), //The minimum amount of players needed to tie the zone.
-		};
-	});
-
-	let maxDist = Math.max(...info.map((x) => x.dist));
-
-	/** Scoring:
-	 * Distance normalized (0-1)
-	 * Tile not owned by me, when there are no enemy's on the zone (+1)
-	 * If we arrive and we cause a majority (+1)
-	 * If we arrive and we have 2 drones too many (-1)
-	 */
-	let test = info.map((x) => {
-		let amount = x.players[drone.team] + 1 + x.zone.targeting.length; //if we arrive
-		let diff = x.minPlayers - amount; //0 means tie, negative means too many drones and positive is too few drones
-
-		return {
-			point:
-				x.dist / maxDist +
-				+(x.zone.owner !== myTeam && x.zone.drones.length === 0) +
-				+(x.zone.owner === myTeam && diff === 0) +
-				+(x.zone.owner !== myTeam && diff === -1) +
-				+(diff < -2) * -100,
-			zone: x.zone,
-		};
-	});
-	test.sort((a, b) => a.point - b.point);
-	return test;
 }
