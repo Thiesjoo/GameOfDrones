@@ -26,6 +26,7 @@ enum DroneStates {
 enum ZoneStates {
 	NeedHelp = "needhelp",
 	Mine = "MINE",
+	Broken = "BROKEN",
 }
 
 const sqDist = (a: Vector2, b: Vector2) =>
@@ -79,7 +80,9 @@ while (true) {
 	}
 
 	const droneMap: { [id: number]: DroneStates } = {};
-	const zoneMap: { [id: number]: { state: ZoneStates; num: number } } = {};
+	const zoneMap: {
+		[id: number]: { state: ZoneStates; num: number; enemies?: number };
+	} = {};
 	drones[myTEAM].forEach((x) => {
 		droneMap[x.id] = DroneStates.Idle;
 	});
@@ -99,11 +102,9 @@ while (true) {
 		);
 
 		let enemiesDrones = Math.max(...Object.values(testin), 0);
-
 		let delta = dronesOnZone.length - enemiesDrones;
 		console.error(
-			`ZOne: ${zoneIndex}, enemies: ${enemiesDrones}, delta: ${delta}`,
-			testin
+			`ZOne: ${zoneIndex}, enemies: ${enemiesDrones}, delta: ${delta}`
 		);
 		if (dronesOnZone.length > 0) {
 			//TODO: Only works with 2 players
@@ -128,19 +129,23 @@ while (true) {
 				switch (currentZone.owner) {
 					case myTEAM:
 						//We won, and delta drones are idle
-						// droneMap[dronesOnZone[0].id] = DroneStates.Idle
+						zoneMap[zoneIndex] = { state: ZoneStates.Mine, num: null };
+						droneMap[dronesOnZone[0].id] = DroneStates.Idle;
 						dronesOnZone.forEach((x, i) => {
 							droneMap[x.id] =
 								i < delta ? DroneStates.Idle : DroneStates.Defending;
 						});
 						break;
 					default:
+						zoneMap[zoneIndex] = { state: ZoneStates.Broken, num: null };
+
 						console.error("Zone is not mine, but delta says so?");
 						break;
 				}
 			} else if (delta < 0) {
 				switch (currentZone.owner) {
 					case myTEAM:
+						zoneMap[zoneIndex] = { state: ZoneStates.Broken, num: null };
 						console.error("Zone is mine, but delta says otherwise?");
 						break;
 					default:
@@ -149,11 +154,12 @@ while (true) {
 							num: -delta + 1,
 						};
 						dronesOnZone.forEach((x) => {
-							droneMap[x.id] = DroneStates.Defending;
+							droneMap[x.id] = DroneStates.Idle;
 						});
 						break;
 				}
 			}
+			zoneMap[zoneIndex].enemies = enemiesDrones;
 		} else {
 			switch (currentZone.owner) {
 				case myTEAM:
@@ -161,11 +167,44 @@ while (true) {
 					break;
 				default:
 					zoneMap[zoneIndex] = { state: ZoneStates.NeedHelp, num: -delta + 1 };
-
 					break;
 			}
 		}
 	});
+
+	let goals = Object.entries(zoneMap).map((y) => {
+		const zone = zones[+y[0]];
+		return {
+			id: y[0],
+			zone,
+			state: y[1].state,
+			needed: y[1].num,
+			enemies: y[1].enemies + y[1].state === ZoneStates.Mine ? 0 : 2,
+		};
+	});
+
+	console.error(goals);
+
+	//Find the optimal set of goals
+	drones[myTEAM].forEach((x, i) => {
+		let current = goals.find((x) => x.enemies > 0);
+		if (!current) {
+			console.error("fuck");
+			let ownGoals = goals.map((y) => {
+				return {
+					...y,
+					dist: sqDist(x.pos, y.zone.pos),
+				};
+			});
+			ownGoals.sort((a, b) => a.dist - b.dist);
+
+			current = ownGoals[0];
+		}
+		console.log(`${current.zone.pos.x} ${current.zone.pos.y}`);
+		current.enemies--;
+	});
+
+	continue;
 
 	drones[myTEAM].forEach((x) => {
 		let state = droneMap[x.id];
