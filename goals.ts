@@ -1,3 +1,7 @@
+/**
+ * RANK: ~900
+ */
+
 class Vector2 {
 	constructor(public x: number, public y: number) {}
 
@@ -23,6 +27,7 @@ enum DroneStates {
 	Defending = "defending",
 	Idle = "idle",
 }
+
 enum ZoneStates {
 	NeedHelp = "needhelp",
 	Mine = "MINE",
@@ -203,79 +208,4 @@ while (true) {
 		console.log(`${current.zone.pos.x} ${current.zone.pos.y}`);
 		current.enemies--;
 	});
-
-	continue;
-
-	drones[myTEAM].forEach((x) => {
-		let state = droneMap[x.id];
-		if (state === DroneStates.Idle) {
-			let targetList = Object.entries(zoneMap)
-				.map((y) => {
-					return {
-						id: y[0],
-						zone: y[1],
-						dist: sqDist(x.pos, zones[+y[0]].pos),
-					};
-				})
-				.filter((y) => {
-					return y.zone.state === ZoneStates.NeedHelp; // && y.zone.num > 0
-				});
-			targetList.sort((a, b) => a.dist - b.dist);
-			let target: { id: string } = targetList.find((y) => y.zone.num > 0);
-			if (!target) {
-				console.error("fuck");
-				target = {
-					id: "0",
-				};
-			}
-			if (zoneMap[+target.id]) zoneMap[+target.id].num -= 1;
-			let zone = zones[+target.id].pos;
-			console.log(`${zone.x} ${zone.y}`);
-		} else if (state === DroneStates.Defending) {
-			console.log(`${x.pos.x} ${x.pos.y}`);
-		} else {
-			console.log("we dun goofed");
-		}
-	});
-
-	continue;
-	for (let i = 0; i < dronesPerTeam; i++) {
-		let distances: Array<{
-			dist: number;
-			zone: Zone;
-			minPlayers: number;
-		}> = zones.map((zone) => {
-			return {
-				dist: sqDist(zone.pos, drones[myTEAM][i].pos),
-				zone,
-				minPlayers: Math.max(
-					...zone.drones.reduce((acc, val) => {
-						if (val.id === myTEAM) return acc;
-						if (!acc[val.id]) acc[val.id] = 0;
-						acc[val.id] += 1;
-						return acc;
-					}, []),
-					0
-				),
-			};
-		});
-
-		distances.sort((a, b) => a.dist - b.dist);
-
-		let testing: Array<{ dist: number; zone: Zone }> = distances.filter(
-			(x) =>
-				x.zone.targeting.filter((y) => y !== myTEAM).length <
-					x.minPlayers + 1 && x.zone.owner !== myTEAM
-		);
-
-		let picked: Zone = null;
-
-		if (testing.length === 0) {
-			picked = distances[0].zone;
-		} else {
-			picked = testing[0].zone;
-		}
-		picked.targeting.push(i);
-		console.log(`${picked.pos.x} ${picked.pos.y}`);
-	}
 }
