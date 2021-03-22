@@ -1,6 +1,7 @@
 interface Point {
     x: number,
-    y: number
+    y: number,
+    z: number
 }
 
 type Index = number;
@@ -8,66 +9,119 @@ type Index = number;
 interface MapPoint {
     links: Array<Index>;
     pos: Point,
-    visited: boolean;
     parent?: number;
 }
 
 interface Obstacle {
     posTrigger: Point,
     posField: Point,
-    state: boolean
+    state: boolean, index: number
 }
 
-function pathFind(currentMap: MapPoint[], start: Point, end: Point, obstacles: Obstacle[]): MapPoint[] {
-    currentMap.forEach(x => {
-        x.visited = false;
-    })
+
+const obst: Obstacle[] = [];
+/** Array of all the fields, Orderd with same index as obst */
+let minifiedObst: number[] = []
+
+
+function pathFind(currentMap: MapPoint[], start: Point, end: Point): Point[] {
+    let visited = {};
+    let parentMap = {}
+
     const endIndex = pointToIndex(end);
     const startIndex = pointToIndex(start);
-
-    const obstIndeces = obstacles.map(x => {
-        return {
-            fieldIndex: pointToIndex(x.posField),
-            triggerIndex: pointToIndex(x.posTrigger),
-            obst: x
-        }
-    })
-
     let queue: Index[] = [startIndex];
 
-
-    currentMap[queue[0]].visited = true
+    visited[startIndex] = true
 
     while (queue.length > 0) {
         const currentNode = queue.shift();
+        // console.error(indexToPoint(currentNode))
 
-        if (currentNode === endIndex) {
-            let path: MapPoint[] = []
-            let currentPath = endIndex
-            while (currentPath !== startIndex) {
-                path.push(currentMap[currentPath])
-                currentPath = currentMap[currentPath].parent
+        if (checkPoints(endIndex, currentNode)) {
+            console.error("FOUND THA END")
+
+            let path: number[] = []
+            let currentPath = currentNode
+
+            // Object.entries(parentMap).map(x => {
+            //     console.error(indexToPoint(+x[0]), indexToPoint(+x[1]))
+            // })
+
+            while (startIndex !== currentPath) {
+                path.push(currentPath)
+                currentPath = parentMap[currentPath]
             }
-            path.push(currentMap[currentPath])
-            path.reverse()
-            return path
+            path.push(currentPath)
+            path.reverse();
+
+            return path.map(x => {
+                return indexToPoint(x)
+            })
         }
 
-        currentMap[currentNode].links.forEach(x => {
-            let neighborNode = currentMap[x];
-            
-            if (!neighborNode.visited && !obstIndeces.find(z => z.fieldIndex === x && z.obst.state)) {
-                neighborNode.parent = currentNode
+        getChildren(currentMap, currentNode).forEach(x => {
+            if (!visited[x]) {
+                // console.error("Children", indexToPoint(x))
+                parentMap[x] = currentNode
                 queue.push(x)
+                visited[x] = true
             }
-            neighborNode.visited = true
         })
     }
     return []
 }
 
 
-const obst: Obstacle[] = [];
+function getChildren(currentMap: MapPoint[], location: Index): number[] {
+    //check if location is switch
+    // If so, change the Z value of all children;
+    const mapPoint = currentMap[stripZ(location)];
+    let currState = dataFromBits(location, 2, height) //Z coordinate
+
+    const foundTrigger = obst.findIndex(ob => ob.posTrigger.x === mapPoint.pos.x && ob.posTrigger.y === mapPoint.pos.y);
+    if (foundTrigger > -1) {
+        currState ^= (1 << foundTrigger)
+    }
+
+    if (mapPoint.pos.x === 3 && mapPoint.pos.y === 8) {
+        console.error(mapPoint, currState.toString(2))
+    }
+
+    //@ts-ignore
+    const filterd: number[] = mapPoint.links.map(x => {
+        //Check if it's an obstacle
+        const ob = minifiedObst.findIndex(y => y === stripZ(x));
+
+        if (mapPoint.pos.x === 3 && mapPoint.pos.y === 8) {
+            console.error(ob,minifiedObst[ob] ,currState.toString(2))
+        }
+
+        if (ob > -1) {
+            // console.error("Found a ob", ob, currState, (currState & 1 << ob) != 0)
+            // Check if obstacle is active
+            if ((currState & (1 << ob)) !== 0) {
+                // console.error("not including obst")
+                return false
+            } else {
+                // console.error(indexToPoint(location), " passing through", currState)
+            }
+        }
+        return x
+    }).filter(x => x !== false).map(x => {
+        // Apply the newest state to the current position
+        //@ts-ignore
+        return dataToBits(x, currState, 2, height)
+    })
+
+    return filterd
+}
+
+
+function obstaclesToNumber(obstacles: Obstacle[]) {
+    return parseInt(obstacles.map(x => x.state ? "1" : "0").join(''), 2)
+}
+
 let start: Point;
 let end: Point;
 let stringMap: string[][] = [];
@@ -84,25 +138,23 @@ for (let i = 0; i < height; i++) {
 
 stringMap.forEach((row, yi) => {
     row.forEach((item, xi) => {
-        const pos = { x: xi, y: yi }
+        const pos = { x: xi, y: yi, z: 0 }
         switch (item) {
             case "+":
             case "#":
                 map[pointToIndex(pos)] = {
                     links: [],
-                    visited: false,
                     pos,
                 }
                 break;
             case ".":
                 let res = [[0, 1], [1, 0], [0, -1], [-1, 0]].map(z => {
                     if (stringMap[z[1] + yi][z[0] + xi] === ".") {
-                        return pointToIndex({ x: z[0] + xi, y: z[1] + yi })
+                        return pointToIndex({ x: z[0] + xi, y: z[1] + yi, z: 0 })
                     }
                 }).filter(z => z)
                 map[pointToIndex(pos)] = {
                     links: res,
-                    visited: false,
                     pos,
                 }
         }
@@ -113,13 +165,15 @@ stringMap.forEach((row, yi) => {
 const startCoords: string[] = readline().split(' ');
 start = {
     x: +startCoords[0],
-    y: +startCoords[1]
+    y: +startCoords[1],
+    z: 0
 }
 
 const endCoords: string[] = readline().split(' ');
 end = {
     x: +endCoords[0],
-    y: +endCoords[1]
+    y: +endCoords[1],
+    z: 0
 }
 
 const switchCount: number = parseInt(readline());
@@ -131,53 +185,79 @@ for (let i = 0; i < switchCount; i++) {
     const blockY: number = parseInt(inputs[3]);
     const initialState: number = parseInt(inputs[4]); // 1 if blocking, 0 otherwise
 
+    let field = {
+        x: blockX,
+        y: blockY,
+        z: 0
+    }
+
+    minifiedObst.push(pointToIndex(field))
     obst.push({
-        posField: {
-            x: blockX,
-            y: blockY
-        },
+        posField: field,
         posTrigger: {
             x: switchX,
-            y: switchY
+            y: switchY,
+            z: 0
         },
-        state: Boolean(initialState)
+        state: Boolean(initialState),
+        index: i
     })
 }
 
-const pathToFry = pathFind(map, start, end, obst)
+start.z = obstaclesToNumber(obst)
 
+console.error(obst, start.z)
+const pathToFry = pathFind(map, start, end)
 console.error(pathToFry);
 
-
-
-// const path = [..., { pos: end }];
-// let str = ""
-// let current = start
-// for (let i = 1; i < path.length; i++) {
-//     let pathPos = path[i].pos
-//     const absX = current.x - pathPos.x;
-//     const absY = current.y - pathPos.y;
-//     if (absX === 1) {
-//         str += "L"
-//     } else if (absX === -1) {
-//         str += "R"
-//     } else if (absY === 1) {
-//         str += "U"
-//     } else if (absY === -1) {
-//         str += "D"
-//     }
-//     current = path[i].pos;
-// }
-// console.error(obst)
-// console.log(str);
+const path = [...pathToFry, end];
+let str = ""
+let current = start
+for (let i = 1; i < path.length; i++) {
+    let pathPos = path[i]
+    const absX = current.x - pathPos.x;
+    const absY = current.y - pathPos.y;
+    if (absX === 1) {
+        str += "L"
+    } else if (absX === -1) {
+        str += "R"
+    } else if (absY === 1) {
+        str += "U"
+    } else if (absY === -1) {
+        str += "D"
+    }
+    current = path[i];
+}
+console.log(str);
 
 
 function indexToPoint(index: Index): Point {
     return {
-        x: index % height,
-        y: Math.floor((index - index % height) / height)
+        x: dataFromBits(index, 0, height),
+        y: dataFromBits(index, 1, height),
+        z: dataFromBits(index, 2, height),
     }
 }
+
 function pointToIndex(pnt: Point): Index {
-    return pnt.x * height + pnt.y
+    return pnt.x | (pnt.y << height) | (pnt.z << height * 2)
+}
+
+function dataToBits(bits: number, data: number, index: number, cutoff: number = 1) {
+    return data << index * cutoff | bits
+}
+
+function dataFromBits(bits: number, index: number, cutoff: number): number {
+    return bits >> index * cutoff & 0xFF
+}
+
+/** Check the x & y of every object */
+function checkPoints(bits1: number, bits2: number): boolean {
+    return dataFromBits(bits1, 0, height) === dataFromBits(bits2, 0, height) && dataFromBits(bits1, 1, height) === dataFromBits(bits2, 1, height)
+}
+
+function stripZ(bits: number): number {
+    let pnt = indexToPoint(bits)
+    pnt.z = 0;
+    return pointToIndex(pnt)
 }
