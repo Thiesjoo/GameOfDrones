@@ -4,10 +4,7 @@ This is my implementation for the [codingame Game Of Drones](https://www.codinga
 
 ## How my code works
 
-### Data parsing:
-
-- Alle drones worden apart opgeslagen
-- Alle zones slaan op welke drones daar op het moment zijn
+Zie het google docs documentje
 
 ###
 
