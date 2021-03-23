@@ -18,13 +18,13 @@ interface Obstacle {
     state: boolean, index: number
 }
 
-const locationBitLength = 6;
-const statusBitLength = 11
+const locationBitLength = 5; // Max heigth is 21. 21 in binary is `10101`. 5 bits are needed to store location
+const statusBitLength = 11; // Max number of switches is 11. So we need 11 bits to represent the state
 
 
-const obst: Obstacle[] = [];
-/** Array of all the fields, Orderd with same index as obst */
+/** Array of all the fields, Ordered by ID*/
 let minifiedFields: number[] = []
+/** Array of all the triggers, Ordered by ID */
 let minifiedTriggers: number[] = []
 
 
@@ -69,48 +69,28 @@ function pathFind(currentMap: MapPoint[], start: Point, end: Point): Point[] {
 
 
 function getChildren(currentMap: MapPoint[], location: Index): number[] {
-    //check if location is switch
-    // If so, change the Z value of all children;
-    const mapPoint = currentMap[stripZ(location)];
-    // let currState = indexToPoint(location).z
-    let currState = getBitRange(location, locationBitLength*2, statusBitLength)
-    // let currState = dataFromBits(location, 2, height) //Z coordinate
+    const mapLocation = stripZ(location)
+    const mapPoint = currentMap[mapLocation];
 
-    const foundTrigger = obst.findIndex(ob => ob.posTrigger.x === mapPoint.pos.x && ob.posTrigger.y === mapPoint.pos.y);
+    let currState = getBitRange(location, locationBitLength * 2, statusBitLength)
+
+    const foundTrigger = minifiedTriggers.findIndex(ob => ob === mapLocation)
     if (foundTrigger > -1) {
         currState ^= (1 << foundTrigger)
     }
 
-    //@ts-ignore
-    const filterd: number[] = mapPoint.links.map(x => {
+    const filtered: number[] = mapPoint.links.map(x => {
         //Check if it's an obstacle
         const ob = minifiedFields.findIndex(y => y === x);
-        if (ob > -1) {
-            if (getBitRange(currState, ob, 1) !== 0) {
-                // if ((currState & (1 << ob)) !== 0) {
-                return false
-            }
+        if (ob > -1 && (currState & (1 << ob)) !== 0) {
+            return false
         }
         return x
     }).filter(x => x !== false).map(x => {
-        // Apply the newest state to the current position
-        //@ts-ignore
-        let samplePnt = indexToPoint(x)
-        samplePnt.z = currState;
-        return pointToIndex(samplePnt)
-        // return dataToBits(x, currState, 2, height)
-
+        return setBitRange(x, 2 * locationBitLength, statusBitLength, currState)
     })
 
-    return filterd
-}
-
-
-function obstaclesToNumber(obstacles: Obstacle[]) {
-    if (obstacles.length === 0) return 0;
-    let obstBits = obstacles.map(x => x.state ? "1" : "0")
-    obstBits.reverse()
-    return parseInt(obstBits.join(''), 2)
+    return filtered
 }
 
 let stringMap: string[][] = [];
@@ -123,7 +103,6 @@ for (let yi = 0; yi < height; yi++) {
     const line: string[] = readline().split("");
     stringMap.push(line)
 }
-
 
 // This happens after init, because it needs all map information
 stringMap.forEach((row, yi) => {
@@ -166,6 +145,7 @@ let end: Point = {
     z: 0
 }
 
+const obstStates = []
 const switchCount: number = parseInt(readline());
 for (let i = 0; i < switchCount; i++) {
     var inputs: string[] = readline().split(' ');
@@ -175,34 +155,28 @@ for (let i = 0; i < switchCount; i++) {
     const blockY: number = parseInt(inputs[3]);
     const initialState: number = parseInt(inputs[4]); // 1 if blocking, 0 otherwise
 
-    let field = {
+    minifiedFields.push(pointToIndex({
         x: blockX,
         y: blockY,
         z: 0
-    }
-
-    minifiedFields.push(pointToIndex(field))
-    obst.push({
-        posField: field,
-        posTrigger: {
-            x: switchX,
-            y: switchY,
-            z: 0
-        },
-        state: Boolean(initialState),
-        index: i
-    })
+    }))
+    minifiedTriggers.push(pointToIndex({
+        x: switchX,
+        y: switchY,
+        z: 0
+    }))
+    obstStates.unshift(initialState ? "1" : "0")
 }
 
-start.z = obstaclesToNumber(obst)
+start.z = parseInt(obstStates.join(''), 2)
 
-let dates = {
+let runtimes = {
     pathfind: 0
 }
 
-dates.pathfind = Date.now()
+runtimes.pathfind = Date.now()
 const pathToFry = pathFind(map, start, end)
-console.error("pathfind time: ", Date.now() - dates.pathfind)
+console.error("pathfind time: ", Date.now() - runtimes.pathfind)
 
 const path = [...pathToFry, end];
 let str = ""
@@ -223,8 +197,6 @@ for (let i = 1; i < path.length; i++) {
     current = path[i];
 }
 console.log(str);
-
-const LN_2 = Math.log(2);
 
 function getBitRange(n, startIndex, size) {
     return (n >> startIndex) & ((1 << size) - 1);
@@ -252,24 +224,16 @@ function indexToPoint(index: Index): Point {
 }
 
 function pointToIndex(pnt: Point): Index {
-    return setBitRange(setBitRange(setBitRange(0, 0, locationBitLength, pnt.x), locationBitLength, locationBitLength, pnt.y), 2 * locationBitLength, statusBitLength, pnt.z)
-    // return pnt.x | (pnt.y << bitHeight) | (pnt.z << bitHeight * 2)
+    // return setBitRange(setBitRange(setBitRange(0, 0, locationBitLength, pnt.x), locationBitLength, locationBitLength, pnt.y), 2 * locationBitLength, statusBitLength, pnt.z)
+    return pnt.x | (pnt.y << locationBitLength) | (pnt.z << locationBitLength * 2)
 }
 
 
 /** Check the x & y of every object */
 function checkPoints(bits1: number, bits2: number): boolean {
-    const pnt1 = indexToPoint(bits1)
-    const pnt2 = indexToPoint(bits2)
-    return pnt1.x === pnt2.x && pnt1.y === pnt2.y
-    // return dataFromBits(bits1, 0, bitHeight) === dataFromBits(bits2, 0, bitHeight) && dataFromBits(bits1, 1, bitHeight) === dataFromBits(bits2, 1, bitHeight)
+    return getBitRange(bits1, 0, locationBitLength) === getBitRange(bits2, 0, locationBitLength) && getBitRange(bits1, locationBitLength, locationBitLength) === getBitRange(bits2, locationBitLength, locationBitLength)
 }
 
 function stripZ(bits: number): number {
     return clearBitRange(bits, 2 * locationBitLength, statusBitLength)
 }
-// function stripZ(bits: number): number {
-//     let pnt = indexToPoint(bits)
-//     pnt.z = 0;
-//     return pointToIndex(pnt)
-// }
