@@ -18,10 +18,14 @@ interface Obstacle {
     state: boolean, index: number
 }
 
+const locationBitLength = 6;
+const statusBitLength = 11
+
 
 const obst: Obstacle[] = [];
 /** Array of all the fields, Orderd with same index as obst */
-let minifiedObst: number[] = []
+let minifiedFields: number[] = []
+let minifiedTriggers: number[] = []
 
 
 function pathFind(currentMap: MapPoint[], start: Point, end: Point): Point[] {
@@ -36,18 +40,10 @@ function pathFind(currentMap: MapPoint[], start: Point, end: Point): Point[] {
 
     while (queue.length > 0) {
         const currentNode = queue.shift();
-        // console.error(indexToPoint(currentNode))
 
         if (checkPoints(endIndex, currentNode)) {
-            console.error("FOUND THA END")
-
             let path: number[] = []
             let currentPath = currentNode
-
-            // Object.entries(parentMap).map(x => {
-            //     console.error(indexToPoint(+x[0]), indexToPoint(+x[1]))
-            // })
-
             while (startIndex !== currentPath) {
                 path.push(currentPath)
                 currentPath = parentMap[currentPath]
@@ -62,7 +58,6 @@ function pathFind(currentMap: MapPoint[], start: Point, end: Point): Point[] {
 
         getChildren(currentMap, currentNode).forEach(x => {
             if (!visited[x]) {
-                // console.error("Children", indexToPoint(x))
                 parentMap[x] = currentNode
                 queue.push(x)
                 visited[x] = true
@@ -77,41 +72,34 @@ function getChildren(currentMap: MapPoint[], location: Index): number[] {
     //check if location is switch
     // If so, change the Z value of all children;
     const mapPoint = currentMap[stripZ(location)];
-    let currState = dataFromBits(location, 2, height) //Z coordinate
+    // let currState = indexToPoint(location).z
+    let currState = getBitRange(location, locationBitLength*2, statusBitLength)
+    // let currState = dataFromBits(location, 2, height) //Z coordinate
 
     const foundTrigger = obst.findIndex(ob => ob.posTrigger.x === mapPoint.pos.x && ob.posTrigger.y === mapPoint.pos.y);
     if (foundTrigger > -1) {
         currState ^= (1 << foundTrigger)
     }
 
-    if (mapPoint.pos.x === 3 && mapPoint.pos.y === 8) {
-        console.error(mapPoint, currState.toString(2))
-    }
-
     //@ts-ignore
     const filterd: number[] = mapPoint.links.map(x => {
         //Check if it's an obstacle
-        const ob = minifiedObst.findIndex(y => y === stripZ(x));
-
-        if (mapPoint.pos.x === 3 && mapPoint.pos.y === 8) {
-            console.error(ob,minifiedObst[ob] ,currState.toString(2))
-        }
-
+        const ob = minifiedFields.findIndex(y => y === x);
         if (ob > -1) {
-            // console.error("Found a ob", ob, currState, (currState & 1 << ob) != 0)
-            // Check if obstacle is active
-            if ((currState & (1 << ob)) !== 0) {
-                // console.error("not including obst")
+            if (getBitRange(currState, ob, 1) !== 0) {
+                // if ((currState & (1 << ob)) !== 0) {
                 return false
-            } else {
-                // console.error(indexToPoint(location), " passing through", currState)
             }
         }
         return x
     }).filter(x => x !== false).map(x => {
         // Apply the newest state to the current position
         //@ts-ignore
-        return dataToBits(x, currState, 2, height)
+        let samplePnt = indexToPoint(x)
+        samplePnt.z = currState;
+        return pointToIndex(samplePnt)
+        // return dataToBits(x, currState, 2, height)
+
     })
 
     return filterd
@@ -119,23 +107,25 @@ function getChildren(currentMap: MapPoint[], location: Index): number[] {
 
 
 function obstaclesToNumber(obstacles: Obstacle[]) {
-    return parseInt(obstacles.map(x => x.state ? "1" : "0").join(''), 2)
+    if (obstacles.length === 0) return 0;
+    let obstBits = obstacles.map(x => x.state ? "1" : "0")
+    obstBits.reverse()
+    return parseInt(obstBits.join(''), 2)
 }
 
-let start: Point;
-let end: Point;
 let stringMap: string[][] = [];
 let map: MapPoint[] = [];
-
 
 const mapInputs: string[] = readline().split(' ');
 const width: number = parseInt(mapInputs[0]);
 const height: number = parseInt(mapInputs[1]);
-for (let i = 0; i < height; i++) {
+for (let yi = 0; yi < height; yi++) {
     const line: string[] = readline().split("");
     stringMap.push(line)
 }
 
+
+// This happens after init, because it needs all map information
 stringMap.forEach((row, yi) => {
     row.forEach((item, xi) => {
         const pos = { x: xi, y: yi, z: 0 }
@@ -163,14 +153,14 @@ stringMap.forEach((row, yi) => {
 
 
 const startCoords: string[] = readline().split(' ');
-start = {
+let start: Point = {
     x: +startCoords[0],
     y: +startCoords[1],
     z: 0
 }
 
 const endCoords: string[] = readline().split(' ');
-end = {
+let end: Point = {
     x: +endCoords[0],
     y: +endCoords[1],
     z: 0
@@ -191,7 +181,7 @@ for (let i = 0; i < switchCount; i++) {
         z: 0
     }
 
-    minifiedObst.push(pointToIndex(field))
+    minifiedFields.push(pointToIndex(field))
     obst.push({
         posField: field,
         posTrigger: {
@@ -206,9 +196,13 @@ for (let i = 0; i < switchCount; i++) {
 
 start.z = obstaclesToNumber(obst)
 
-console.error(obst, start.z)
+let dates = {
+    pathfind: 0
+}
+
+dates.pathfind = Date.now()
 const pathToFry = pathFind(map, start, end)
-console.error(pathToFry);
+console.error("pathfind time: ", Date.now() - dates.pathfind)
 
 const path = [...pathToFry, end];
 let str = ""
@@ -230,34 +224,52 @@ for (let i = 1; i < path.length; i++) {
 }
 console.log(str);
 
+const LN_2 = Math.log(2);
+
+function getBitRange(n, startIndex, size) {
+    return (n >> startIndex) & ((1 << size) - 1);
+}
+
+function setBitRange(n, startIndex, size, value) {
+    const mask = (1 << size) - 1;
+    return (
+        n & ~(mask << startIndex)
+    ) | ((value & mask) << startIndex);
+}
+
+function clearBitRange(n, startIndex, size) {
+    const mask = (1 << size) - 1;
+    return n & ~(mask << startIndex);
+}
+
 
 function indexToPoint(index: Index): Point {
     return {
-        x: dataFromBits(index, 0, height),
-        y: dataFromBits(index, 1, height),
-        z: dataFromBits(index, 2, height),
+        x: getBitRange(index, 0, locationBitLength),
+        y: getBitRange(index, locationBitLength, locationBitLength),
+        z: getBitRange(index, 2 * locationBitLength, statusBitLength),
     }
 }
 
 function pointToIndex(pnt: Point): Index {
-    return pnt.x | (pnt.y << height) | (pnt.z << height * 2)
+    return setBitRange(setBitRange(setBitRange(0, 0, locationBitLength, pnt.x), locationBitLength, locationBitLength, pnt.y), 2 * locationBitLength, statusBitLength, pnt.z)
+    // return pnt.x | (pnt.y << bitHeight) | (pnt.z << bitHeight * 2)
 }
 
-function dataToBits(bits: number, data: number, index: number, cutoff: number = 1) {
-    return data << index * cutoff | bits
-}
-
-function dataFromBits(bits: number, index: number, cutoff: number): number {
-    return bits >> index * cutoff & 0xFF
-}
 
 /** Check the x & y of every object */
 function checkPoints(bits1: number, bits2: number): boolean {
-    return dataFromBits(bits1, 0, height) === dataFromBits(bits2, 0, height) && dataFromBits(bits1, 1, height) === dataFromBits(bits2, 1, height)
+    const pnt1 = indexToPoint(bits1)
+    const pnt2 = indexToPoint(bits2)
+    return pnt1.x === pnt2.x && pnt1.y === pnt2.y
+    // return dataFromBits(bits1, 0, bitHeight) === dataFromBits(bits2, 0, bitHeight) && dataFromBits(bits1, 1, bitHeight) === dataFromBits(bits2, 1, bitHeight)
 }
 
 function stripZ(bits: number): number {
-    let pnt = indexToPoint(bits)
-    pnt.z = 0;
-    return pointToIndex(pnt)
+    return clearBitRange(bits, 2 * locationBitLength, statusBitLength)
 }
+// function stripZ(bits: number): number {
+//     let pnt = indexToPoint(bits)
+//     pnt.z = 0;
+//     return pointToIndex(pnt)
+// }
