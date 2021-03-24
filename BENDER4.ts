@@ -4,10 +4,8 @@ interface Point {
     z: number
 }
 
-type Index = number;
-
 interface MapPoint {
-    links: Array<Index>;
+    links: Array<number>;
     pos: Point,
     parent?: number;
 }
@@ -34,7 +32,7 @@ function pathFind(currentMap: MapPoint[], start: Point, end: Point): Point[] {
 
     const endIndex = pointToIndex(end);
     const startIndex = pointToIndex(start);
-    let queue: Index[] = [startIndex];
+    let queue: number[] = [startIndex];
 
     visited[startIndex] = true
 
@@ -68,7 +66,7 @@ function pathFind(currentMap: MapPoint[], start: Point, end: Point): Point[] {
 }
 
 
-function getChildren(currentMap: MapPoint[], location: Index): number[] {
+function getChildren(currentMap: MapPoint[], location: number): number[] {
     const mapLocation = stripZ(location)
     const mapPoint = currentMap[mapLocation];
 
@@ -79,16 +77,18 @@ function getChildren(currentMap: MapPoint[], location: Index): number[] {
         currState ^= (1 << foundTrigger)
     }
 
-    const filtered: number[] = mapPoint.links.map(x => {
+    const filtered = mapPoint.links.map(x => {
         //Check if it's an obstacle
         const ob = minifiedFields.findIndex(y => y === x);
         if (ob > -1 && (currState & (1 << ob)) !== 0) {
             return false
         }
         return x
-    }).filter(x => x !== false).map(x => {
-        return setBitRange(x, 2 * locationBitLength, statusBitLength, currState)
     })
+        //Filter out obstacles
+        .filter(x => x !== false)
+        //Apply new state
+        .map((x: number) => x | currState << 2 * locationBitLength)
 
     return filtered
 }
@@ -117,6 +117,7 @@ stringMap.forEach((row, yi) => {
                 }
                 break;
             case ".":
+                // Get all neighbors
                 let res = [[0, 1], [1, 0], [0, -1], [-1, 0]].map(z => {
                     if (stringMap[z[1] + yi][z[0] + xi] === ".") {
                         return pointToIndex({ x: z[0] + xi, y: z[1] + yi, z: 0 })
@@ -129,7 +130,6 @@ stringMap.forEach((row, yi) => {
         }
     })
 })
-
 
 const startCoords: string[] = readline().split(' ');
 let start: Point = {
@@ -168,10 +168,12 @@ for (let i = 0; i < switchCount; i++) {
     obstStates.unshift(initialState ? "1" : "0")
 }
 
+// Initial state
 start.z = parseInt(obstStates.join(''), 2)
 
 let runtimes = {
-    pathfind: 0
+    pathfind: 0,
+    stringCount: 0,
 }
 
 runtimes.pathfind = Date.now()
@@ -179,34 +181,140 @@ const pathToFry = pathFind(map, start, end)
 console.error("pathfind time: ", Date.now() - runtimes.pathfind)
 
 const path = [...pathToFry, end];
-let str = ""
+let resultSTR = ""
 let current = start
 for (let i = 1; i < path.length; i++) {
     let pathPos = path[i]
     const absX = current.x - pathPos.x;
     const absY = current.y - pathPos.y;
     if (absX === 1) {
-        str += "L"
+        resultSTR += "L"
     } else if (absX === -1) {
-        str += "R"
+        resultSTR += "R"
     } else if (absY === 1) {
-        str += "U"
+        resultSTR += "U"
     } else if (absY === -1) {
-        str += "D"
+        resultSTR += "D"
     }
     current = path[i];
 }
-console.log(str);
+
+
+function findRepetition(p: string) {
+    let lookup: {
+        [x: string]: number;
+    } = {};
+
+    while (p.length !== 0) {
+        for (let i = 0; i < p.length; i++) {
+            let tmp = p.substr(0, i);
+            if (!lookup[tmp]) lookup[tmp] = 0;
+            lookup[tmp] += 1;
+        }
+        p = p.substring(1);
+    }
+    return lookup;
+}
+
+function repeats(p: string): string {
+	let a = findRepetition(p);
+	let rs = Object.entries(a)
+		.filter((x, i) => i !== 0 && x[1] > 1)
+		.map((x) => x[0])
+		// Check if length is larger than 2 and if the string appears at least twice
+		.filter((x) => x.length > 3 && p.split(x).length - 1 > 4);
+	rs?.sort((a, b) => p.split(b).length - 1 - (p.split(a).length - 1));
+
+	let func: string[] = [];
+	let newRes = p;
+	rs.forEach((x, i) => {
+		// Max 9 functions
+		if (i < 9) {
+			func.push(x);
+			newRes = newRes.replace(new RegExp(`${x}`, "g"), func.length.toString());
+		}
+	});
+	const test = `${newRes};${func.join(";")}`;
+	return test;
+}
+
+function repeats2(p: string): string {
+    let func = [];
+
+    while (func.length !== 9) {
+        let a = findRepetition(p);
+        let rs = Object.entries(a)
+            // At least 3 occurences and string has to be at least 3 char's long
+            .filter((x, i) => i !== 0 && x[1] > 3 && x[0].length > 3 && !x[0].includes(";"))
+            .map((x) => x[0]);
+        if (rs.length === 0) {
+            break;
+        }
+
+        // Current funciton number
+        const curr = func.length.toString() + 1;
+
+        // Sort based on length of string
+        rs?.sort((a, b) => {
+            let aTest = p.replace(new RegExp(`${a}`, "g"), curr);
+            let bTest = p.replace(new RegExp(`${b}`, "g"), curr);
+            return bTest.length + b.length - (aTest.length + a.length);
+        });
+
+        // Replace our search string
+        p = p.replace(new RegExp(`${rs[0]}`, "g"), curr) + ";" + rs[0];
+        func.push(rs[0]);
+    }
+
+    return p
+}
+
+
+
+
+function repeats1(p: string): string {
+	let func = [];
+
+	while (func.length !== 9) {
+		let a = findRepetition(p);
+		let rs = Object.entries(a)
+			// At least 3 occurences and string has to be at least 3 char's long
+			.filter((x, i) => i !== 0 && x[1] > 2 && x[0].length > 2 )
+			.map((x) => x[0]);
+		if (rs.length === 0) {
+			break;
+		}
+
+		// Current funciton number
+		const curr = func.length.toString() + 1;
+
+		// Sort based on length of string
+		rs?.sort((a, b) => {
+			let aTest = p.replace(new RegExp(`${a}`, "g"), curr);
+			let bTest = p.replace(new RegExp(`${b}`, "g"), curr);
+			return bTest.length + b.length - (aTest.length + a.length);
+		});
+
+		// Replace our search string
+		p = p.replace(new RegExp(`${rs[0]}`, "g"), curr);
+		func.push(rs[0]);
+	}
+
+	return `${p};${func.join(";")}`;
+}
+
+
+runtimes.stringCount = Date.now()
+
+let res = repeats(resultSTR)
+
+console.error("String: ", Date.now() - runtimes.stringCount)
+console.error(`Unoptimzed path: `, resultSTR)
+console.error("Total", Date.now() - runtimes.pathfind)
+console.log(res)
 
 function getBitRange(n, startIndex, size) {
     return (n >> startIndex) & ((1 << size) - 1);
-}
-
-function setBitRange(n, startIndex, size, value) {
-    const mask = (1 << size) - 1;
-    return (
-        n & ~(mask << startIndex)
-    ) | ((value & mask) << startIndex);
 }
 
 function clearBitRange(n, startIndex, size) {
@@ -214,8 +322,7 @@ function clearBitRange(n, startIndex, size) {
     return n & ~(mask << startIndex);
 }
 
-
-function indexToPoint(index: Index): Point {
+function indexToPoint(index: number): Point {
     return {
         x: getBitRange(index, 0, locationBitLength),
         y: getBitRange(index, locationBitLength, locationBitLength),
@@ -223,11 +330,9 @@ function indexToPoint(index: Index): Point {
     }
 }
 
-function pointToIndex(pnt: Point): Index {
-    // return setBitRange(setBitRange(setBitRange(0, 0, locationBitLength, pnt.x), locationBitLength, locationBitLength, pnt.y), 2 * locationBitLength, statusBitLength, pnt.z)
+function pointToIndex(pnt: Point): number {
     return pnt.x | (pnt.y << locationBitLength) | (pnt.z << locationBitLength * 2)
 }
-
 
 /** Check the x & y of every object */
 function checkPoints(bits1: number, bits2: number): boolean {
