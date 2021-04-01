@@ -217,41 +217,85 @@ function findRepetition(p: string) {
 }
 
 function repeats(p: string): string {
-	let a = findRepetition(p);
-	let rs = Object.entries(a)
-		.filter((x, i) => i !== 0 && x[1] > 1)
-		.map((x) => x[0])
-		// Check if length is larger than 2 and if the string appears at least twice
-		.filter((x) => x.length > 3 && p.split(x).length - 1 > 4);
-	rs?.sort((a, b) => p.split(b).length - 1 - (p.split(a).length - 1));
+    let a = findRepetition(p);
+    let rs = Object.entries(a)
+        .filter((x, i) => i !== 0 && x[1] > 1)
+        .map((x) => x[0])
+        // Check if length is larger than 2 and if the string appears at least twice
+        .filter((x) => x.length > 3 && p.split(x).length - 1 > 4);
+    rs?.sort((a, b) => p.split(b).length - 1 - (p.split(a).length - 1));
 
-	let func: string[] = [];
-	let newRes = p;
-	rs.forEach((x, i) => {
-		// Max 9 functions
-		if (i < 9) {
-			func.push(x);
-			newRes = newRes.replace(new RegExp(`${x}`, "g"), func.length.toString());
-		}
-	});
-	const test = `${newRes};${func.join(";")}`;
-	return test;
+    let func: string[] = [];
+    let newRes = p;
+    rs.forEach((x, i) => {
+        // Max 9 functions
+        if (i < 9) {
+            func.push(x);
+            newRes = newRes.replace(new RegExp(`${x}`, "g"), func.length.toString());
+        }
+    });
+    const test = `${newRes};${func.join(";")}`;
+    return test;
 }
 
-function repeats2(p: string): string {
+function repeats2(s: string): string {
+	let func = [];
+
+	let p = s;
+
+	while (func.length !== 9) {
+		let a = findRepetition(p);
+		let rs = Object.entries(a)
+			.filter((x, i) => i !== 0 && x[1] > 1)
+			.map((x) => x[0])
+			// Check if length is larger than 2 and if the string appears at least twice
+			.filter((x) => x.length > 3 && p.split(x).length - 1 > 4);
+
+		if (rs.length === 0) {
+			break;
+		}
+
+		// Current function number
+		const curr = (func.length + 1).toString();
+
+		// Sort based on length of string
+		rs?.sort((a, b) => {
+			let aTest = p.replace(new RegExp(`${a}`, "g"), curr);
+			let bTest = p.replace(new RegExp(`${b}`, "g"), curr);
+			return bTest.length + b.length - (aTest.length + a.length);
+		});
+
+		// console.log(p, func, rs[0]);
+
+		// Replace our search string
+		p = p.replace(new RegExp(`${rs[0]}`, "g"), curr);
+		func.push(rs[0]);
+	}
+
+	// console.log(p)
+	return `${p};${func.join(";")}`;
+}
+
+
+function repeats1(p: string): string {
     let func = [];
 
     while (func.length !== 9) {
         let a = findRepetition(p);
         let rs = Object.entries(a)
             // At least 3 occurences and string has to be at least 3 char's long
-            .filter((x, i) => i !== 0 && x[1] > 3 && x[0].length > 3 && !x[0].includes(";"))
+            .filter(
+                (x, i) =>
+                    i !== 0 &&
+                    x[1] > 2 && //Count of occurenses
+                    x[0].length > 3 // String
+            )
             .map((x) => x[0]);
         if (rs.length === 0) {
             break;
         }
 
-        // Current funciton number
+        // Current function number
         const curr = func.length.toString() + 1;
 
         // Sort based on length of string
@@ -262,45 +306,11 @@ function repeats2(p: string): string {
         });
 
         // Replace our search string
-        p = p.replace(new RegExp(`${rs[0]}`, "g"), curr) + ";" + rs[0];
+        p = p.replace(new RegExp(`${rs[0]}`, "g"), curr);
         func.push(rs[0]);
     }
 
-    return p
-}
-
-
-
-
-function repeats1(p: string): string {
-	let func = [];
-
-	while (func.length !== 9) {
-		let a = findRepetition(p);
-		let rs = Object.entries(a)
-			// At least 3 occurences and string has to be at least 3 char's long
-			.filter((x, i) => i !== 0 && x[1] > 2 && x[0].length > 2 )
-			.map((x) => x[0]);
-		if (rs.length === 0) {
-			break;
-		}
-
-		// Current funciton number
-		const curr = func.length.toString() + 1;
-
-		// Sort based on length of string
-		rs?.sort((a, b) => {
-			let aTest = p.replace(new RegExp(`${a}`, "g"), curr);
-			let bTest = p.replace(new RegExp(`${b}`, "g"), curr);
-			return bTest.length + b.length - (aTest.length + a.length);
-		});
-
-		// Replace our search string
-		p = p.replace(new RegExp(`${rs[0]}`, "g"), curr);
-		func.push(rs[0]);
-	}
-
-	return `${p};${func.join(";")}`;
+    return `${p};${func.join(";")}`;
 }
 
 
