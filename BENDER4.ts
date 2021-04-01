@@ -39,6 +39,7 @@ function pathFind(currentMap: MapPoint[], start: Point, end: Point): Point[] {
     while (queue.length > 0) {
         const currentNode = queue.shift();
 
+        // Check if we are at the end
         if (checkPoints(endIndex, currentNode)) {
             let path: number[] = []
             let currentPath = currentNode
@@ -49,9 +50,7 @@ function pathFind(currentMap: MapPoint[], start: Point, end: Point): Point[] {
             path.push(currentPath)
             path.reverse();
 
-            return path.map(x => {
-                return indexToPoint(x)
-            })
+            return path.map(x => indexToPoint(x))
         }
 
         getChildren(currentMap, currentNode).forEach(x => {
@@ -67,11 +66,13 @@ function pathFind(currentMap: MapPoint[], start: Point, end: Point): Point[] {
 
 
 function getChildren(currentMap: MapPoint[], location: number): number[] {
+    // Get location on the map
     const mapLocation = stripZ(location)
     const mapPoint = currentMap[mapLocation];
 
     let currState = getBitRange(location, locationBitLength * 2, statusBitLength)
 
+    // If we are on a switch, trigger that bit in the state
     const foundTrigger = minifiedTriggers.findIndex(ob => ob === mapLocation)
     if (foundTrigger > -1) {
         currState ^= (1 << foundTrigger)
@@ -87,7 +88,7 @@ function getChildren(currentMap: MapPoint[], location: number): number[] {
     })
         //Filter out obstacles
         .filter(x => x !== false)
-        //Apply new state
+        //Apply new state to every child
         .map((x: number) => x | currState << 2 * locationBitLength)
 
     return filtered
@@ -111,13 +112,14 @@ stringMap.forEach((row, yi) => {
         switch (item) {
             case "+":
             case "#":
+                //Walls have no links to other paths
                 map[pointToIndex(pos)] = {
                     links: [],
                     pos,
                 }
                 break;
             case ".":
-                // Get all neighbors
+                // Get every point in every direction and map it to a point
                 let res = [[0, 1], [1, 0], [0, -1], [-1, 0]].map(z => {
                     if (stringMap[z[1] + yi][z[0] + xi] === ".") {
                         return pointToIndex({ x: z[0] + xi, y: z[1] + yi, z: 0 })
@@ -165,6 +167,7 @@ for (let i = 0; i < switchCount; i++) {
         y: switchY,
         z: 0
     }))
+    // Add current state to the front of obstacle states
     obstStates.unshift(initialState ? "1" : "0")
 }
 
@@ -199,8 +202,9 @@ for (let i = 1; i < path.length; i++) {
     current = path[i];
 }
 
-
+/** Count repetitions in a string */
 function findRepetition(p: string) {
+    // 1 object that contains the count of every substring of p
     let lookup: {
         [x: string]: number;
     } = {};
@@ -238,100 +242,26 @@ function repeats(p: string): string {
     return test;
 }
 
-function repeats2(s: string): string {
-	let func = [];
-
-	let p = s;
-
-	while (func.length !== 9) {
-		let a = findRepetition(p);
-		let rs = Object.entries(a)
-			.filter((x, i) => i !== 0 && x[1] > 1)
-			.map((x) => x[0])
-			// Check if length is larger than 2 and if the string appears at least twice
-			.filter((x) => x.length > 3 && p.split(x).length - 1 > 4);
-
-		if (rs.length === 0) {
-			break;
-		}
-
-		// Current function number
-		const curr = (func.length + 1).toString();
-
-		// Sort based on length of string
-		rs?.sort((a, b) => {
-			let aTest = p.replace(new RegExp(`${a}`, "g"), curr);
-			let bTest = p.replace(new RegExp(`${b}`, "g"), curr);
-			return bTest.length + b.length - (aTest.length + a.length);
-		});
-
-		// console.log(p, func, rs[0]);
-
-		// Replace our search string
-		p = p.replace(new RegExp(`${rs[0]}`, "g"), curr);
-		func.push(rs[0]);
-	}
-
-	// console.log(p)
-	return `${p};${func.join(";")}`;
-}
-
-
-function repeats1(p: string): string {
-    let func = [];
-
-    while (func.length !== 9) {
-        let a = findRepetition(p);
-        let rs = Object.entries(a)
-            // At least 3 occurences and string has to be at least 3 char's long
-            .filter(
-                (x, i) =>
-                    i !== 0 &&
-                    x[1] > 2 && //Count of occurenses
-                    x[0].length > 3 // String
-            )
-            .map((x) => x[0]);
-        if (rs.length === 0) {
-            break;
-        }
-
-        // Current function number
-        const curr = func.length.toString() + 1;
-
-        // Sort based on length of string
-        rs?.sort((a, b) => {
-            let aTest = p.replace(new RegExp(`${a}`, "g"), curr);
-            let bTest = p.replace(new RegExp(`${b}`, "g"), curr);
-            return bTest.length + b.length - (aTest.length + a.length);
-        });
-
-        // Replace our search string
-        p = p.replace(new RegExp(`${rs[0]}`, "g"), curr);
-        func.push(rs[0]);
-    }
-
-    return `${p};${func.join(";")}`;
-}
-
-
 runtimes.stringCount = Date.now()
 
 let res = repeats(resultSTR)
 
+console.error("---TIMES---")
 console.error("String: ", Date.now() - runtimes.stringCount)
 console.error(`Unoptimzed path: `, resultSTR)
 console.error("Total", Date.now() - runtimes.pathfind)
 console.log(res)
 
-function getBitRange(n, startIndex, size) {
+function getBitRange(n: number, startIndex: number, size: number): number {
     return (n >> startIndex) & ((1 << size) - 1);
 }
 
-function clearBitRange(n, startIndex, size) {
+function clearBitRange(n: number, startIndex: number, size: number): number {
     const mask = (1 << size) - 1;
     return n & ~(mask << startIndex);
 }
 
+/** Convert a number to a point */
 function indexToPoint(index: number): Point {
     return {
         x: getBitRange(index, 0, locationBitLength),
@@ -340,11 +270,12 @@ function indexToPoint(index: number): Point {
     }
 }
 
+/** Convert a point object to a number */
 function pointToIndex(pnt: Point): number {
     return pnt.x | (pnt.y << locationBitLength) | (pnt.z << locationBitLength * 2)
 }
 
-/** Check the x & y of every object */
+/** Check if the x & y are the same (2 points encoded as number) */
 function checkPoints(bits1: number, bits2: number): boolean {
     return getBitRange(bits1, 0, locationBitLength) === getBitRange(bits2, 0, locationBitLength) && getBitRange(bits1, locationBitLength, locationBitLength) === getBitRange(bits2, locationBitLength, locationBitLength)
 }
