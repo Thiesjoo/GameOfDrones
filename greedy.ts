@@ -88,6 +88,7 @@ while (true) {
 			return {
 				dist: sqDist(zone.pos, drones[myTEAM][i].pos),
 				zone,
+				// This code under here is actually incorrect, because it compares id's with teams. If I correct the code, it performs way worse. Idk why.
 				minPlayers: Math.max(
 					...zone.drones.reduce((acc, val) => {
 						if (val.id === myTEAM) return acc;
